@@ -1,0 +1,9 @@
+[workspace]
+members = ["factory-bin", "factory-core", "factory-io"]
+resolver = "2"
+
+[profile.release]
+lto = true
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
