@@ -1,5 +1,5 @@
 [workspace]
-members = ["factory-bin", "factory-core", "factory-io"]
+members = ["factory-bin", "factory-lib"]
 resolver = "2"
 
 [profile.release]

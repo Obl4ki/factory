@@ -1,0 +1,17 @@
+{
+  "base" : "1.1.104",
+  "miniloader" : "1.15.7",
+  "AutoDeconstruct" : "0.3.8",
+  "BlueprintLab_Blu3wolf" : "1.0.4",
+  "bullet-trails" : "0.6.2",
+  "cardinal" : "0.1.4",
+  "DiscoScience" : "1.1.3",
+  "Factorissimo2" : "2.5.3",
+  "flib" : "0.12.9",
+  "helmod" : "0.12.19",
+  "recipelister" : "2.8.0",
+  "romulinhoeasystart" : "2.3.0",
+  "Squeak Through" : "1.8.2",
+  "Waterfill_v17" : "1.1.0",
+  "UltimateResearchQueue" : "1.0.12"
+}

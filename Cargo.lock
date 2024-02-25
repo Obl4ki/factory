@@ -6,19 +6,14 @@ version = 3
 name = "factory-bin"
 version = "0.1.0"
 dependencies = [
- "factory-io",
+ "factory-lib",
  "thiserror",
 ]
 
 [[package]]
-name = "factory-core"
-version = "0.1.0"
-
-[[package]]
-name = "factory-io"
+name = "factory-lib"
 version = "0.1.0"
 dependencies = [
- "factory-core",
  "serde",
  "serde_json",
  "thiserror",
