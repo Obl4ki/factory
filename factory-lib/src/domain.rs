@@ -4,8 +4,6 @@ use crate::entities::Item;
 use crate::entities::ItemAmount;
 use crate::entities::Recipe;
 
-use petgraph::dot::Config;
-use petgraph::dot::Dot;
 use petgraph::graph::NodeIndex;
 use petgraph::prelude::*;
 
