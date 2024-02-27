@@ -27,7 +27,7 @@ pub enum Node<'a> {
 /// And such, if the edge is
 /// - (Recipe -> Item), then it has a weight that describes how much items can be crafted from this recipe.
 /// - (Item -> Recipe), then it's weight describes the amount of items needed for target recipe.
-pub fn create_crafting_tree<'a>(dataset: &'a [Recipe]) -> DiGraph<Node<'a>, ItemAmount> {
+pub fn create_crafting_tree(dataset: &[Recipe]) -> DiGraph<Node, ItemAmount> {
     let mut nodes: HashMap<Node, NodeIndex> = HashMap::new();
     let mut g = DiGraph::new();
 
