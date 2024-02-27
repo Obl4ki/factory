@@ -1,22 +1,29 @@
-#[derive(Debug, Clone)]
+use std::time::Duration;
+
+pub type ItemName = String;
+pub type RecipeName = String;
+pub type ItemAmount = usize;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Recipe {
-    pub result: Vec<Item>,
-    pub ingredients: Vec<Item>,
-    pub quantity_per_second: f32,
+    pub name: RecipeName,
+    pub result: Vec<(ItemAmount, Item)>,
+    pub ingredients: Vec<(ItemAmount, Item)>,
+    pub time: Duration,
     pub factory_kind: FactoryKind,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Item {
-    pub name: String,
-    pub amount: usize,
+    pub name: ItemName,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FactoryKind {
     Assembler,
     OilRefinery,
     ChemicalPlant,
     Centrifuge,
     Smelter,
+    RocketSilo,
 }

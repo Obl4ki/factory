@@ -1,10 +1,10 @@
 use crate::{
-    entities::{self, FactoryKind, Item, Recipe},
+    entities::{FactoryKind, Item, Recipe},
     error::DataError,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::{collections::HashMap, fs, path::Path};
+
+use std::{collections::HashMap, fs, path::Path, time::Duration};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct RecipeJson {
@@ -14,7 +14,7 @@ pub struct RecipeJson {
     category: String,
     products: Vec<ItemJson>,
     #[serde(rename = "energy")]
-    time: f32,
+    time: f64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -39,23 +39,25 @@ pub fn load_dataset(json_path: impl AsRef<Path>) -> Result<Vec<Recipe>, DataErro
     let data = recipes
         .into_values()
         .map(|rec| Recipe {
-            // TODO
-            result: rec.products.into_iter().map(|prod| Item { name: prod.name, amount: prod.amount }).collect(),
+            name: rec.name,
+            result: rec.products.into_iter().map(|prod| (prod.amount, Item{ name: prod.name })).collect(),
             ingredients: match rec.ingredients {
-                IngredientField::Regular(items) => items.into_iter().map(|item| Item{ name: item.name, amount: item.amount }).collect(),
+                IngredientField::Regular(items) => items.into_iter().map(|item| (item.amount, Item{ name: item.name })).collect(),
                 IngredientField::Empty {} => vec![],
             },
-            quantity_per_second: rec.time,
+            time: Duration::from_secs_f64(rec.time),
             factory_kind: match rec.category.as_str() {
-                "crafting" | "crafting-with-fluid" => FactoryKind::Assembler,
+                "crafting" | "crafting-with-fluid" | "advanced-crafting" => FactoryKind::Assembler,
                 "oil-processing" => FactoryKind::OilRefinery,
                 "smelting" => FactoryKind::Smelter,
+                "centrifuging" => FactoryKind::Centrifuge,
+                "chemistry" => FactoryKind::ChemicalPlant,
+                "rocket-building" => FactoryKind::RocketSilo,
                 other => {
                     println!("I encountered other kind of crafting recipe: {other}. Defaulting to regular assembler recipe.");
                     FactoryKind::Assembler
                 }
             },
-            
         })
         .collect();
 

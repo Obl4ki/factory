@@ -1,4 +1,5 @@
 use factory_lib::prelude::*;
+
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -9,7 +10,6 @@ enum ApplicationError {
 
 fn main() -> Result<(), ApplicationError> {
     let data = load_dataset("recipe-lister/recipe.json")?;
-    println!("{data:#?}");
-    // get_crafting_path();
+    let recipe_graph = create_crafting_tree(&data);
     Ok(())
 }
