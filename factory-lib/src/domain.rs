@@ -70,6 +70,8 @@ impl<'data> CraftingGraph<'data> {
         g.into()
     }
 
+    /// Get all indices of item nodes that are direct input items to the recipe provided.
+    /// If the node is not a recipe or it doesn't exist in graph, None is returned.
     pub fn get_recipes_input_idxs(&self, node: Node) -> Option<Vec<NodeIndex>> {
         match node {
             Node::Recipe(_) => Some(
@@ -81,6 +83,8 @@ impl<'data> CraftingGraph<'data> {
         }
     }
 
+    /// Get all indices of item nodes that are direct output items to the recipe provided.
+    /// If the node is not a recipe or it doesn't exist in graph, None is returned.
     pub fn get_recipes_output_idxs(&self, node: Node) -> Option<Vec<NodeIndex>> {
         match node {
             Node::Recipe(_) => Some(
@@ -92,6 +96,8 @@ impl<'data> CraftingGraph<'data> {
         }
     }
 
+    /// Get all indices of recipes that use the item provided as ingredient.
+    /// If the node is not an item or it doesn't exist in graph, None is returned.
     pub fn get_items_as_ingredients_in_recipes_idxs(&self, node: Node) -> Option<Vec<NodeIndex>> {
         match node {
             Node::Item(_) => Some(
@@ -103,6 +109,8 @@ impl<'data> CraftingGraph<'data> {
         }
     }
 
+    /// Get all indices of recipes that use the item provided as ingredient.
+    /// If the node is not an item or it doesn't exist in graph, None is returned.
     pub fn get_items_as_outputs_in_recipes_idxs(&self, node: Node) -> Option<Vec<NodeIndex>> {
         match node {
             Node::Item(_) => Some(
@@ -113,6 +121,7 @@ impl<'data> CraftingGraph<'data> {
             Node::Recipe(_) => None,
         }
     }
+
 
     pub fn get_node_idx(&self, target_node: Node) -> Option<NodeIndex> {
         self.data
