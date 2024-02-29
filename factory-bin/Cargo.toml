@@ -7,5 +7,4 @@ edition = "2021"
 
 [dependencies]
 thiserror="1.0.57"
-petgraph = "0.6.4"
 factory-lib = { path = "../factory-lib" }
