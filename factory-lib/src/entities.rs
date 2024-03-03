@@ -16,6 +16,7 @@ pub struct Recipe {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Item {
     pub name: ItemName,
+    pub natural: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

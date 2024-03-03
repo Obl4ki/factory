@@ -1,8 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fmt;
 
 use crate::entities::{Item, ItemAmount, Recipe};
 
+use petgraph::dot::{Config, Dot};
 use petgraph::graph::NodeIndex;
 use petgraph::prelude::*;
 
@@ -18,9 +19,9 @@ impl<'data> From<DiGraph<Node<'data>, ItemAmount>> for CraftingGraph<'data> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Node<'a> {
-    Item(&'a Item),
-    Recipe(&'a Recipe),
+pub enum Node<'data> {
+    Item(&'data Item),
+    Recipe(&'data Recipe),
 }
 
 impl<'a> fmt::Display for Node<'a> {
@@ -65,7 +66,7 @@ impl<'data> CraftingGraph<'data> {
             let recipe_idx = g.add_node(Node::Recipe(recipe));
 
             for (amount, item) in &recipe.result {
-                // ensure that all results item are inserted into graph before creating relevant edges
+                // Ensure that all results item are inserted into graph before creating relevant edges
                 nodes
                     .entry(Node::Item(item))
                     .or_insert_with(|| g.add_node(Node::Item(item)));
@@ -164,35 +165,24 @@ impl<'data> CraftingGraph<'data> {
         let mut first_tree: Self = Self::new();
         let subgraph_head_idx = first_tree.data.add_node(target);
 
-        // Subgraph, indexes of nodes in self, indexes of nodes in subgraph
-        let mut processing_queue: Vec<(Self, Vec<NodeIndex>, Vec<NodeIndex>)> =
-            vec![(first_tree, vec![target_idx], vec![subgraph_head_idx])];
+        let mut processing_queue: VecDeque<(Self, Vec<(NodeIndex, NodeIndex)>)> =
+            VecDeque::from([(first_tree, vec![(target_idx, subgraph_head_idx)])]);
 
-        while let Some((
-            mut subgraph,
-            mut graph_processing_indices,
-            mut subgraph_processing_indices,
-        )) = processing_queue.pop()
-        {
-            if subgraph_processing_indices.is_empty() || graph_processing_indices.is_empty() {
+        while let Some((mut subgraph, mut processing_indices)) = processing_queue.pop_front() {
+            if processing_indices.is_empty() {
                 complete_subgraphs.push(subgraph);
                 continue;
             }
 
-            let current_graph_idx = graph_processing_indices.pop()?;
-            let current_subgraph_idx = subgraph_processing_indices.pop()?;
+            let (current_graph_idx, current_subgraph_idx) = processing_indices.pop()?;
 
             match subgraph.data[current_subgraph_idx] {
-                Node::Item(_) => {
+                Node::Item(item) => {
                     let recipe_graph_idxs =
                         self.get_recipes_with_item_in_outputs(self.data[current_graph_idx]);
 
-                    if recipe_graph_idxs.as_ref().is_some_and(Vec::is_empty) {
-                        processing_queue.push((
-                            subgraph,
-                            graph_processing_indices,
-                            subgraph_processing_indices,
-                        ));
+                    if item.natural {
+                        processing_queue.push_back((subgraph, processing_indices));
                         continue;
                     }
 
@@ -215,20 +205,12 @@ impl<'data> CraftingGraph<'data> {
                             recipe_output,
                         );
 
-                        let mut branched_graph_processing_indices =
-                            graph_processing_indices.clone();
+                        let mut branched_processing_indices = processing_indices.clone();
 
-                        branched_graph_processing_indices.push(recipe_graph_idx);
+                        branched_processing_indices
+                            .push((recipe_graph_idx, added_recipe_subgraph_idx));
 
-                        let mut branched_subgraph_processing_indices =
-                            subgraph_processing_indices.clone();
-                        branched_subgraph_processing_indices.push(added_recipe_subgraph_idx);
-
-                        processing_queue.push((
-                            branched_subgraph,
-                            branched_graph_processing_indices,
-                            branched_subgraph_processing_indices,
-                        ))
+                        processing_queue.push_back((branched_subgraph, branched_processing_indices))
                     }
                 }
                 Node::Recipe(_) => {
@@ -248,15 +230,15 @@ impl<'data> CraftingGraph<'data> {
                                 .next()?,
                         );
 
-                        graph_processing_indices.push(item_graph_idx);
-                        subgraph_processing_indices.push(added_item_subgraph_idx);
+                        if subgraph.copy_of_node_is_present_in_ancestors(item, current_subgraph_idx)
+                        {
+                            continue;
+                        }
+
+                        processing_indices.push((item_graph_idx, added_item_subgraph_idx));
                     }
 
-                    processing_queue.push((
-                        subgraph,
-                        graph_processing_indices,
-                        subgraph_processing_indices,
-                    ));
+                    processing_queue.push_back((subgraph, processing_indices));
                 }
             }
         }
@@ -266,6 +248,29 @@ impl<'data> CraftingGraph<'data> {
 
     pub fn indices_to_nodes(&self, indices: &[NodeIndex]) -> Vec<Node> {
         indices.iter().map(|idx| self.data[*idx]).collect()
+    }
+
+    fn copy_of_node_is_present_in_ancestors(
+        &self,
+        node: Node,
+        parent_of_node_idx: NodeIndex,
+    ) -> bool {
+        let mut dfs = Dfs::new(&self.data, parent_of_node_idx);
+        while let Some(idx) = dfs.next(&self.data) {
+            if self.data[idx] == node {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn to_dot(&self) -> String {
+        // Config::_Incomplete gives the best drawing despite being WIP
+        format!(
+            "{}",
+            Dot::with_config(&self.data, &[Config::_Incomplete(())])
+        )
     }
 }
 
