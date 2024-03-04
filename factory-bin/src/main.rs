@@ -14,6 +14,8 @@ mod common;
 mod error;
 
 fn main() -> AppResult<()> {
+    let max_number_of_results = 3;
+
     let natural_items: Vec<String> = [
         "coal",
         "copper-ore",
@@ -35,19 +37,19 @@ fn main() -> AppResult<()> {
     let recipe_graph = CraftingGraph::from_dataset(&data);
 
     let search_item = &Item {
-        name: "advanced-circuit".to_string(),
+        name: "spidertron".to_string(),
         natural: false,
     };
 
     let mut graphs = recipe_graph
-        .get_crafting_trees(Node::Item(search_item))
+        .get_crafting_trees(Node::Item(search_item), max_number_of_results)
         .expect("Result should be present");
 
     println!("Total number of graphs: {}", graphs.len());
 
     graphs.sort_by(|graph1, graph2| graph1.data.node_count().cmp(&graph2.data.node_count()));
 
-    for (idx, crafting_possibility) in graphs.iter().take(2).enumerate() {
+    for (idx, crafting_possibility) in graphs.iter().enumerate() {
         println!(
             "Recipe path {idx} created with {} nodes",
             crafting_possibility.data.node_count()

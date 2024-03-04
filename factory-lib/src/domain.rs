@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::fmt;
 
 use crate::entities::{Item, ItemAmount, Recipe};
@@ -157,7 +157,11 @@ impl<'data> CraftingGraph<'data> {
     /// [`Node::Item`] will consider every recipe which result in this item.
     /// If target doesn't exist in graph, then None is returned.
 
-    pub fn get_crafting_trees(&'data self, target: Node<'data>) -> Option<Vec<Self>> {
+    pub fn get_crafting_trees(
+        &'data self,
+        target: Node<'data>,
+        max_number_of_solutions: usize,
+    ) -> Option<Vec<Self>> {
         let mut complete_subgraphs: Vec<Self> = vec![];
 
         let target_idx = self.get_node_idx(target)?;
@@ -165,13 +169,17 @@ impl<'data> CraftingGraph<'data> {
         let mut first_tree: Self = Self::new();
         let subgraph_head_idx = first_tree.data.add_node(target);
 
-        let mut processing_queue: VecDeque<(Self, Vec<(NodeIndex, NodeIndex)>)> =
-            VecDeque::from([(first_tree, vec![(target_idx, subgraph_head_idx)])]);
+        let mut processing_queue: Vec<(Self, Vec<(NodeIndex, NodeIndex)>)> =
+            Vec::from([(first_tree, vec![(target_idx, subgraph_head_idx)])]);
 
-        while let Some((mut subgraph, mut processing_indices)) = processing_queue.pop_front() {
+        while let Some((mut subgraph, mut processing_indices)) = processing_queue.pop() {
             if processing_indices.is_empty() {
                 complete_subgraphs.push(subgraph);
                 continue;
+            }
+
+            if complete_subgraphs.len() >= max_number_of_solutions {
+                break;
             }
 
             let (current_graph_idx, current_subgraph_idx) = processing_indices.pop()?;
@@ -182,7 +190,7 @@ impl<'data> CraftingGraph<'data> {
                         self.get_recipes_with_item_in_outputs(self.data[current_graph_idx]);
 
                     if item.natural {
-                        processing_queue.push_back((subgraph, processing_indices));
+                        processing_queue.push((subgraph, processing_indices));
                         continue;
                     }
 
@@ -210,7 +218,7 @@ impl<'data> CraftingGraph<'data> {
                         branched_processing_indices
                             .push((recipe_graph_idx, added_recipe_subgraph_idx));
 
-                        processing_queue.push_back((branched_subgraph, branched_processing_indices))
+                        processing_queue.push((branched_subgraph, branched_processing_indices))
                     }
                 }
                 Node::Recipe(_) => {
@@ -238,7 +246,7 @@ impl<'data> CraftingGraph<'data> {
                         processing_indices.push((item_graph_idx, added_item_subgraph_idx));
                     }
 
-                    processing_queue.push_back((subgraph, processing_indices));
+                    processing_queue.push((subgraph, processing_indices));
                 }
             }
         }
