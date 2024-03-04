@@ -1,6 +1,6 @@
 use crate::{
     entities::{FactoryKind, Item, Recipe},
-    error::DataError,
+    error::FactoryError,
 };
 use serde::{Deserialize, Serialize};
 
@@ -32,11 +32,11 @@ pub struct ItemJson {
 pub fn load_dataset(
     json_path: impl AsRef<Path>,
     natural_item_names: &[String],
-) -> Result<Vec<Recipe>, DataError> {
-    let recipes_str = fs::read_to_string(json_path).map_err(DataError::JsonFileNotFound)?;
+) -> Result<Vec<Recipe>, FactoryError> {
+    let recipes_str = fs::read_to_string(json_path).map_err(FactoryError::Io)?;
 
     let recipes: HashMap<String, RecipeJson> =
-        serde_json::from_str(&recipes_str).map_err(DataError::BadJson)?;
+        serde_json::from_str(&recipes_str).map_err(FactoryError::BadJson)?;
 
     let data: Vec<Recipe> = recipes
         .into_values()

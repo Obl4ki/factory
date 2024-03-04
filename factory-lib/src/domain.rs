@@ -1,7 +1,12 @@
 use std::collections::HashMap;
-use std::fmt;
+use std::io::Write as _;
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
+use std::{fmt, fs};
 
 use crate::entities::{Item, ItemAmount, Recipe};
+use crate::error::FactoryResult;
+use crate::prelude::FactoryError;
 
 use petgraph::dot::{Config, Dot};
 use petgraph::graph::NodeIndex;
@@ -279,6 +284,39 @@ impl<'data> CraftingGraph<'data> {
             "{}",
             Dot::with_config(&self.data, &[Config::_Incomplete(())])
         )
+    }
+
+    pub fn save_as_svg(&self, file_name: PathBuf) -> FactoryResult<()> {
+        let dot = self.to_dot();
+        let mut cmd = Command::new("dot")
+            .arg("-Tsvg")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        {
+            let mut stdin = cmd.stdin.take().ok_or(FactoryError::CommandSpawn(
+                "Failed to take stdin".to_string(),
+            ))?;
+
+            stdin.write_all(dot.as_bytes())?;
+        }
+        let verbose = true;
+        let output = cmd.wait_with_output()?;
+
+        if !output.stdout.is_empty() || verbose {
+            println!("stdout: {}", std::str::from_utf8(&output.stdout)?);
+        }
+
+        if !output.stderr.is_empty() {
+            println!("stderr: {}", std::str::from_utf8(&output.stderr)?);
+        }
+
+        let mut file = fs::File::create(file_name)?;
+        file.write_all(&output.stdout)?;
+
+        Ok(())
     }
 }
 
