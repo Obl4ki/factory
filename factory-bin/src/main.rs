@@ -52,7 +52,7 @@ fn main() -> AppResult<()> {
         );
 
         let file_name: PathBuf = format!("outputs/output_{idx}.svg").into();
-        crafting_possibility.save_as_svg(file_name)?;
+        crafting_possibility.save_as_svg(file_name, true)?;
     }
 
     Ok(())
