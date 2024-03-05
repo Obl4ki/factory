@@ -286,7 +286,7 @@ impl<'data> CraftingGraph<'data> {
         )
     }
 
-    pub fn save_as_svg(&self, file_name: PathBuf, verbose: bool) -> FactoryResult<()> {
+    pub fn save_as_svg(&self, file_name: PathBuf) -> FactoryResult<()> {
         let dot = self.to_dot();
         let mut cmd = Command::new("dot")
             .arg("-Tsvg")
@@ -304,10 +304,6 @@ impl<'data> CraftingGraph<'data> {
         }
 
         let output = cmd.wait_with_output()?;
-
-        if !output.stdout.is_empty() || verbose {
-            println!("stdout: {}", std::str::from_utf8(&output.stdout)?);
-        }
 
         if !output.stderr.is_empty() {
             println!("stderr: {}", std::str::from_utf8(&output.stderr)?);
