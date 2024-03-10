@@ -1,11 +1,12 @@
 [package]
-name = "factory-bin"
+name = "factory-exploration"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-thiserror="1.0.57"
 factory-lib = { path = "../factory-lib" }
+itertools = "0.12.1"
+anyhow = "1.0.80"
 
 [lints]
 workspace = true

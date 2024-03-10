@@ -1,4 +1,4 @@
-pub use crate::data::load_dataset;
+pub use crate::data::DataSet;
 pub use crate::error::FactoryError;
 
 pub use crate::domain::CraftingGraph;

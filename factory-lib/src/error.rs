@@ -8,12 +8,15 @@ pub enum FactoryError {
     #[error(transparent)]
     Io(#[from] io::Error),
 
+    #[error("Couldn't represent `{0}` as decimal.")]
+    CantRepresentAmountAsDecimal(usize),
+
     #[error("Failed to parse provided json file `{0}`")]
-    BadJson(serde_json::Error),
+    JsonMalformed(serde_json::Error),
 
     #[error("Error when spawning command: `{0}`")]
     CommandSpawn(String),
 
     #[error("Failed to interpret the output of command")]
-    CommandOutputError(#[from] std::str::Utf8Error)
+    CommandOutputError(#[from] std::str::Utf8Error),
 }

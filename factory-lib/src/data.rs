@@ -1,10 +1,13 @@
 use crate::{
     entities::{FactoryKind, Item, Recipe},
-    error::FactoryError,
+    error::{FactoryError, FactoryResult},
+    traits,
 };
+use itertools::Itertools as _;
+use rust_decimal::{prelude::FromPrimitive as _, Decimal};
 use serde::{Deserialize, Serialize};
 
-use std::{collections::HashMap, fs, path::Path, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct RecipeJson {
@@ -29,72 +32,204 @@ pub struct ItemJson {
     amount: usize,
 }
 
-pub fn load_dataset(
-    json_path: impl AsRef<Path>,
-    natural_item_names: &[String],
-) -> Result<Vec<Recipe>, FactoryError> {
-    let recipes_str = fs::read_to_string(json_path).map_err(FactoryError::Io)?;
-
-    let recipes: HashMap<String, RecipeJson> =
-        serde_json::from_str(&recipes_str).map_err(FactoryError::BadJson)?;
-
-    let data: Vec<Recipe> = recipes
-        .into_values()
-        .map(|rec| {
-            let result = rec
-                .products
-                .into_iter()
-                .map(|prod| {
-                    (
-                        prod.amount,
-                        Item {
-                            natural: natural_item_names.contains(&prod.name),
-                            name: prod.name,
-                        },
-                    )
-                })
-                .collect();
-
-            let ingredients = match rec.ingredients {
-                IngredientField::Regular(items) => items
-                    .into_iter()
-                    .map(|item| {
-                        (
-                            item.amount,
-                            Item {
-                                natural: natural_item_names.contains(&item.name),
-                                name: item.name,
-                            },
-                        )
-                    })
-                    .collect(),
-                IngredientField::Empty {} => vec![],
-            };
-
-            Recipe {
-                name: rec.name,
-                result,
-                ingredients,
-                time: Duration::from_secs_f64(rec.time),
-                factory_kind: category_into_factory_kind(&rec.category),
-            }
-        })
-        .collect();
-
-    Ok(data)
+pub struct DataSet {
+    pub recipes: Vec<Recipe>,
+    pub items: Vec<Item>,
 }
 
-fn category_into_factory_kind(category: &str) -> FactoryKind {
-    match category {
-        "crafting" | "crafting-with-fluid" | "advanced-crafting" => FactoryKind::Assembler,
-        "oil-processing" => FactoryKind::OilRefinery,
-        "smelting" => FactoryKind::Smelter,
-        "centrifuging" => FactoryKind::Centrifuge,
-        "chemistry" => FactoryKind::ChemicalPlant,
-        "rocket-building" => FactoryKind::RocketSilo,
-        other => {
-            println!("I encountered other kind of crafting recipe: {other}. Defaulting to regular assembler recipe.");
-            FactoryKind::Assembler
+impl traits::DataSource for DataSet {
+    fn from_str(recipes_str: &str, natural_item_names: &[String]) -> FactoryResult<Self>
+    where
+        Self: Sized,
+    {
+        let recipes: HashMap<String, RecipeJson> =
+            serde_json::from_str(recipes_str).map_err(FactoryError::JsonMalformed)?;
+        let recipes: Vec<Recipe> = recipes
+            .into_values()
+            .map(|rec| {
+                let results: FactoryResult<Vec<(Decimal, Item)>> = rec
+                    .products
+                    .into_iter()
+                    .map(|prod| {
+                        Ok((
+                            Decimal::from_usize(prod.amount).ok_or_else(|| {
+                                FactoryError::CantRepresentAmountAsDecimal(prod.amount)
+                            })?,
+                            Item {
+                                natural: natural_item_names.contains(&prod.name),
+                                name: prod.name,
+                            },
+                        ))
+                    })
+                    .collect();
+
+                let ingredients: FactoryResult<Vec<(Decimal, Item)>> = match rec.ingredients {
+                    IngredientField::Regular(items) => items
+                        .into_iter()
+                        .map(|item| {
+                            Ok((
+                                Decimal::from_usize(item.amount).ok_or_else(|| {
+                                    FactoryError::CantRepresentAmountAsDecimal(item.amount)
+                                })?,
+                                Item {
+                                    natural: natural_item_names.contains(&item.name),
+                                    name: item.name,
+                                },
+                            ))
+                        })
+                        .collect(),
+                    IngredientField::Empty {} => Ok(vec![]),
+                };
+
+                Ok(Recipe {
+                    name: rec.name,
+                    results: results?,
+                    ingredients: ingredients?,
+                    time: Duration::from_secs_f64(rec.time),
+                    factory_kind: Self::category_into_factory_kind(&rec.category),
+                })
+            })
+            .collect::<FactoryResult<Vec<Recipe>>>()?;
+        let items = recipes
+            .iter()
+            .flat_map(|recipe| recipe.ingredients.iter())
+            .chain(recipes.iter().flat_map(|recipe| recipe.results.iter()))
+            .map(|(_, item)| item)
+            .unique()
+            .cloned()
+            .collect();
+
+        Ok(Self { recipes, items })
+    }
+
+    fn iter_items(&self) -> impl Iterator<Item = &Item> {
+        self.items.iter()
+    }
+
+    fn iter_recipes(&self) -> impl Iterator<Item = &Recipe> {
+        self.recipes.iter()
+    }
+}
+
+impl DataSet {
+    // pub fn from_str(recipes_str: &str, natural_item_names: &[String]) -> FactoryResult<Self> {
+    //     let recipes: HashMap<String, RecipeJson> =
+    //         serde_json::from_str(&recipes_str).map_err(FactoryError::JsonMalformed)?;
+    //     let recipes: Vec<Recipe> = recipes
+    //         .into_values()
+    //         .map(|rec| {
+    //             let results: FactoryResult<Vec<(Decimal, Item)>> = rec
+    //                 .products
+    //                 .into_iter()
+    //                 .map(|prod| {
+    //                     Ok((
+    //                         Decimal::from_usize(prod.amount).ok_or_else(|| {
+    //                             FactoryError::CantRepresentAmountAsDecimal(prod.amount)
+    //                         })?,
+    //                         Item {
+    //                             natural: natural_item_names.contains(&prod.name),
+    //                             name: prod.name,
+    //                         },
+    //                     ))
+    //                 })
+    //                 .collect();
+
+    //             let ingredients: FactoryResult<Vec<(Decimal, Item)>> = match rec.ingredients {
+    //                 IngredientField::Regular(items) => items
+    //                     .into_iter()
+    //                     .map(|item| {
+    //                         Ok((
+    //                             Decimal::from_usize(item.amount).ok_or_else(|| {
+    //                                 FactoryError::CantRepresentAmountAsDecimal(item.amount)
+    //                             })?,
+    //                             Item {
+    //                                 natural: natural_item_names.contains(&item.name),
+    //                                 name: item.name,
+    //                             },
+    //                         ))
+    //                     })
+    //                     .collect(),
+    //                 IngredientField::Empty {} => Ok(vec![]),
+    //             };
+
+    //             Ok(Recipe {
+    //                 name: rec.name,
+    //                 results: results?,
+    //                 ingredients: ingredients?,
+    //                 time: Duration::from_secs_f64(rec.time),
+    //                 factory_kind: Self::category_into_factory_kind(&rec.category),
+    //             })
+    //         })
+    //         .collect::<FactoryResult<Vec<Recipe>>>()?;
+    //     let items = recipes
+    //         .iter()
+    //         .flat_map(|recipe| recipe.ingredients.iter())
+    //         .chain(recipes.iter().flat_map(|recipe| recipe.results.iter()))
+    //         .map(|(_, item)| item)
+    //         .unique()
+    //         .cloned()
+    //         .collect();
+
+    //     Ok(Self { recipes, items })
+    // }
+
+    // pub fn from_json(
+    //     json_path: impl AsRef<Path>,
+    //     natural_item_names: &[String],
+    // ) -> FactoryResult<DataSet> {
+    //     let recipes_str = fs::read_to_string(json_path).map_err(FactoryError::Io)?;
+
+    //     Self::from_str(&recipes_str, natural_item_names)
+    // }
+
+    pub fn natural_items(&self) -> Vec<&Item> {
+        self.items.iter().filter(|item| item.natural).collect()
+    }
+
+    pub fn try_get_item(&self, name: &str) -> Option<&Item> {
+        self.items.iter().find(|item| item.name == name)
+    }
+
+    pub fn get_item(&self, name: &str) -> &Item {
+        self.items
+            .iter()
+            .find(|item| item.name == name)
+            .unwrap_or_else(|| panic!("Item {name} not found"))
+    }
+
+    pub fn try_get_recipe(&self, name: &str) -> Option<&Recipe> {
+        self.recipes.iter().find(|recipe| recipe.name == name)
+    }
+
+    pub fn get_recipe(&self, name: &str) -> &Recipe {
+        self.recipes
+            .iter()
+            .find(|recipe| recipe.name == name)
+            .unwrap_or_else(|| panic!("Recipe {name} not found"))
+    }
+
+    /// Sorts the database item's and recipe's alphabetically by names.
+    pub fn sorted_by_names(mut self) -> Self {
+        self.items
+            .sort_by(|item1, item2| item1.name.cmp(&item2.name));
+        self.recipes
+            .sort_by(|recipe1, recipe2| recipe1.name.cmp(&recipe2.name));
+
+        self
+    }
+
+    fn category_into_factory_kind(category: &str) -> FactoryKind {
+        match category {
+            "crafting" | "crafting-with-fluid" | "advanced-crafting" => FactoryKind::Assembler,
+            "oil-processing" => FactoryKind::OilRefinery,
+            "smelting" => FactoryKind::Smelter,
+            "centrifuging" => FactoryKind::Centrifuge,
+            "chemistry" => FactoryKind::ChemicalPlant,
+            "rocket-building" => FactoryKind::RocketSilo,
+            other => {
+                println!("I encountered other kind of crafting recipe: {other}. Defaulting to regular assembler recipe.");
+                FactoryKind::Assembler
+            }
         }
     }
 }
