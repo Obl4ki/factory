@@ -1,9 +1,10 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::cmp::Ordering;
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::io::Write as _;
 
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::{Command, Stdio};
-use std::{fmt, fs};
+use std::{cmp, fmt, fs};
 
 use crate::entities::{Item, ItemAmount, Recipe};
 use crate::error::FactoryResult;
@@ -21,6 +22,16 @@ pub struct CraftingGraph<'data> {
     natural_items: Vec<&'data Item>,
 }
 
+impl cmp::PartialEq for CraftingGraph<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        let self_tiers = self.iter_nodes().map(|node| node.get_tier()).sum::<Tier>();
+        let other_tiers = other.iter_nodes().map(|node| node.get_tier()).sum::<Tier>();
+        self_tiers == other_tiers
+    }
+}
+
+impl cmp::Eq for CraftingGraph<'_> {}
+
 impl<'data, D> From<&'data D> for CraftingGraph<'data>
 where
     D: DataSource,
@@ -33,7 +44,7 @@ where
     }
 }
 
-type Tier = u8;
+type Tier = usize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Node<'data> {
@@ -41,7 +52,21 @@ pub enum Node<'data> {
     Recipe(&'data Recipe, Tier),
 }
 
-impl<'a> fmt::Display for Node<'a> {
+impl Node<'_> {
+    fn get_tier(&self) -> Tier {
+        match self {
+            Node::Item(_, tier) | Node::Recipe(_, tier) => *tier,
+        }
+    }
+
+    fn set_tier(&mut self, new_tier: Tier) {
+        match self {
+            Node::Item(_, tier) | Node::Recipe(_, tier) => *tier = new_tier,
+        }
+    }
+}
+
+impl fmt::Display for Node<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Node::Item(item, tier) => {
@@ -56,33 +81,53 @@ impl<'a> fmt::Display for Node<'a> {
     }
 }
 
-impl<'a> Node<'a> {
-    fn get_tier(&self) -> Tier {
-        match self {
-            Node::Item(_, tier) | Node::Recipe(_, tier) => *tier,
-        }
-    }
-
-    fn set_tier(&mut self, new_tier: Tier) {
-        match self {
-            Node::Item(_, tier) | Node::Recipe(_, tier) => *tier = new_tier,
-        }
+impl cmp::PartialOrd for CraftingGraph<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
-/// Create a directed graph of items and recipes.
-/// Each node is either item or recipe, which alternate between one another. In other words, there
-/// is no node which has any neighbour with the same type as itself.
-/// This works because:
-/// - Item can be made from several recipes (Recipe -> Item)
-/// - Item can be used in several recipes (Item -> Recipe)
-/// - Recipe can use several items (Item -> Recipe)
-/// - Recipe can return several items (Recipe -> Item)
-///
-/// And such, if the edge is
-/// - (Recipe -> Item), then it has a weight that describes how much items can be crafted from this recipe.
-/// - (Item -> Recipe), then it's weight describes the amount of items needed for target recipe.
+impl cmp::Ord for CraftingGraph<'_> {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        let self_score = self.iter_nodes().map(|node| node.get_tier()).sum::<Tier>();
+
+        let other_score = other.iter_nodes().map(|node| node.get_tier()).sum::<Tier>();
+
+        other_score
+            .partial_cmp(&self_score)
+            .unwrap_or(Ordering::Equal)
+    }
+}
+
 impl<'data> CraftingGraph<'data> {
+    /// Create a directed graph of items and recipes.
+    /// Each node is either item or recipe, which alternate between one another. In other words, there
+    /// is no node which has any neighbour with the same type as itself.
+    /// This works because:
+    /// - Item can be made from several recipes (Recipe -> Item)
+    /// - Item can be used in several recipes (Item -> Recipe)
+    /// - Recipe can use several items (Item -> Recipe)
+    /// - Recipe can return several items (Recipe -> Item)
+    ///
+    /// And such, if the edge is
+    /// - (Recipe -> Item), then it has a weight that describes how much items can be crafted from this recipe.
+    /// - (Item -> Recipe), then it's weight describes the amount of items needed for target recipe.
+    pub fn iter_nodes(&self) -> impl Iterator<Item = Node> {
+        self.data.node_weights().copied()
+    }
+
+    pub fn get_item_node(&self, item_name: &str) -> Node {
+        self.iter_nodes()
+            .find(|item| matches!(item, Node::Item(Item {name, .. }, _) if name == item_name))
+            .unwrap_or_else(|| panic!("Recipe {item_name} not found"))
+    }
+
+    pub fn get_recipe_node(&self, recipe_name: &str) -> Node {
+        self.iter_nodes()
+            .find(|recipe| matches!(recipe, Node::Recipe(Recipe {name, .. }, _) if name == recipe_name))
+            .unwrap_or_else(|| panic!("Recipe {recipe_name} not found"))
+    }
+
     pub fn from_dataset<D: DataSource>(dataset: &'data D) -> Self {
         let mut graph = Self::from(dataset);
 
@@ -180,7 +225,7 @@ impl<'data> CraftingGraph<'data> {
                         .iter()
                         .map(|recipes_idx| self.data[*recipes_idx].get_tier())
                         .min()
-                        .unwrap_or(0);
+                        .unwrap_or(1);
 
                     self.data[current_idx].set_tier(recipes_tier_min + 1);
 
@@ -210,8 +255,7 @@ impl<'data> CraftingGraph<'data> {
                                 .into_iter()
                                 .map(|idx| self.data[idx])
                                 .map(|node| node.get_tier())
-                                .max()
-                                .unwrap_or(0);
+                                .sum::<Tier>();
 
                             self.data[current_idx].set_tier(ingredients_tier_sum + 1);
 
@@ -221,18 +265,13 @@ impl<'data> CraftingGraph<'data> {
                             );
                         }
                         None => {
-                            // recipe with no ingredients... the earliest recipe tier is 2, so let's assume that
-                            self.data[current_idx].set_tier(2);
+                            self.data[current_idx].set_tier(0);
                         }
                     }
                 }
             }
             visited.insert(current_idx);
         }
-    }
-
-    pub fn iter_nodes(&self) -> impl Iterator<Item = Node> {
-        self.data.node_weights().copied()
     }
 
     /// Get all indices of item nodes that are direct input items to the recipe provided.
@@ -247,7 +286,6 @@ impl<'data> CraftingGraph<'data> {
                         let tier2 = self.data[*idx2].get_tier();
                         tier1.cmp(&tier2)
                     })
-                    .rev()
                     .collect(),
             ),
             Node::Item(..) => None,
@@ -266,7 +304,6 @@ impl<'data> CraftingGraph<'data> {
                         let tier2 = self.data[*idx2].get_tier();
                         tier1.cmp(&tier2)
                     })
-                    .rev()
                     .collect(),
             ),
             Node::Item(..) => None,
@@ -285,7 +322,6 @@ impl<'data> CraftingGraph<'data> {
                         let tier2 = self.data[*idx2].get_tier();
                         tier1.cmp(&tier2)
                     })
-                    .rev()
                     .collect(),
             ),
             Node::Recipe(..) => None,
@@ -304,7 +340,6 @@ impl<'data> CraftingGraph<'data> {
                         let tier2 = self.data[*idx2].get_tier();
                         tier1.cmp(&tier2)
                     })
-                    .rev()
                     .collect(),
             ),
             Node::Recipe(..) => None,
@@ -353,17 +388,18 @@ impl<'data> CraftingGraph<'data> {
 
         let target_idx = self.get_node_idx(target)?;
 
-        let mut first_tree: Self = Self {
+        let mut first_tree = Self {
             data: DiGraph::new(),
             natural_items: self.natural_items.clone(),
         };
         let subgraph_head_idx = first_tree.data.add_node(target);
 
-        let mut processing_queue: Vec<(Self, Vec<(NodeIndex, NodeIndex)>)> =
-            Vec::from([(first_tree, vec![(target_idx, subgraph_head_idx)])]);
+        let mut processing_queue: BinaryHeap<(Self, Vec<(NodeIndex, NodeIndex)>)> =
+            BinaryHeap::from([(first_tree, vec![(target_idx, subgraph_head_idx)])]);
 
         while let Some((mut subgraph, mut processing_indices)) = processing_queue.pop() {
             if processing_indices.is_empty() {
+                println!("Found possibility with len {}", subgraph.data.node_count());
                 complete_subgraphs.push(subgraph);
                 continue;
             }
@@ -489,7 +525,7 @@ impl<'data> CraftingGraph<'data> {
         )
     }
 
-    pub fn save_as_svg(&self, file_name: PathBuf) -> FactoryResult<()> {
+    pub fn save_as_svg(&self, file_name: impl AsRef<Path>) -> FactoryResult<()> {
         let dot = self.to_dot();
         let mut cmd = Command::new("dot")
             .arg("-Tsvg")

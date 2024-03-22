@@ -1,5 +1,5 @@
 use crate::{
-    entities::{FactoryKind, Item, Recipe},
+    entities::{Item, Recipe},
     error::{FactoryError, FactoryResult},
     traits,
 };
@@ -112,76 +112,6 @@ impl traits::DataSource for DataSet {
 }
 
 impl DataSet {
-    // pub fn from_str(recipes_str: &str, natural_item_names: &[String]) -> FactoryResult<Self> {
-    //     let recipes: HashMap<String, RecipeJson> =
-    //         serde_json::from_str(&recipes_str).map_err(FactoryError::JsonMalformed)?;
-    //     let recipes: Vec<Recipe> = recipes
-    //         .into_values()
-    //         .map(|rec| {
-    //             let results: FactoryResult<Vec<(Decimal, Item)>> = rec
-    //                 .products
-    //                 .into_iter()
-    //                 .map(|prod| {
-    //                     Ok((
-    //                         Decimal::from_usize(prod.amount).ok_or_else(|| {
-    //                             FactoryError::CantRepresentAmountAsDecimal(prod.amount)
-    //                         })?,
-    //                         Item {
-    //                             natural: natural_item_names.contains(&prod.name),
-    //                             name: prod.name,
-    //                         },
-    //                     ))
-    //                 })
-    //                 .collect();
-
-    //             let ingredients: FactoryResult<Vec<(Decimal, Item)>> = match rec.ingredients {
-    //                 IngredientField::Regular(items) => items
-    //                     .into_iter()
-    //                     .map(|item| {
-    //                         Ok((
-    //                             Decimal::from_usize(item.amount).ok_or_else(|| {
-    //                                 FactoryError::CantRepresentAmountAsDecimal(item.amount)
-    //                             })?,
-    //                             Item {
-    //                                 natural: natural_item_names.contains(&item.name),
-    //                                 name: item.name,
-    //                             },
-    //                         ))
-    //                     })
-    //                     .collect(),
-    //                 IngredientField::Empty {} => Ok(vec![]),
-    //             };
-
-    //             Ok(Recipe {
-    //                 name: rec.name,
-    //                 results: results?,
-    //                 ingredients: ingredients?,
-    //                 time: Duration::from_secs_f64(rec.time),
-    //                 factory_kind: Self::category_into_factory_kind(&rec.category),
-    //             })
-    //         })
-    //         .collect::<FactoryResult<Vec<Recipe>>>()?;
-    //     let items = recipes
-    //         .iter()
-    //         .flat_map(|recipe| recipe.ingredients.iter())
-    //         .chain(recipes.iter().flat_map(|recipe| recipe.results.iter()))
-    //         .map(|(_, item)| item)
-    //         .unique()
-    //         .cloned()
-    //         .collect();
-
-    //     Ok(Self { recipes, items })
-    // }
-
-    // pub fn from_json(
-    //     json_path: impl AsRef<Path>,
-    //     natural_item_names: &[String],
-    // ) -> FactoryResult<DataSet> {
-    //     let recipes_str = fs::read_to_string(json_path).map_err(FactoryError::Io)?;
-
-    //     Self::from_str(&recipes_str, natural_item_names)
-    // }
-
     pub fn natural_items(&self) -> Vec<&Item> {
         self.items.iter().filter(|item| item.natural).collect()
     }
@@ -216,20 +146,5 @@ impl DataSet {
             .sort_by(|recipe1, recipe2| recipe1.name.cmp(&recipe2.name));
 
         self
-    }
-
-    fn category_into_factory_kind(category: &str) -> FactoryKind {
-        match category {
-            "crafting" | "crafting-with-fluid" | "advanced-crafting" => FactoryKind::Assembler,
-            "oil-processing" => FactoryKind::OilRefinery,
-            "smelting" => FactoryKind::Smelter,
-            "centrifuging" => FactoryKind::Centrifuge,
-            "chemistry" => FactoryKind::ChemicalPlant,
-            "rocket-building" => FactoryKind::RocketSilo,
-            other => {
-                println!("I encountered other kind of crafting recipe: {other}. Defaulting to regular assembler recipe.");
-                FactoryKind::Assembler
-            }
-        }
     }
 }

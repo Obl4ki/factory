@@ -3,7 +3,8 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 
-use factory_lib::{prelude::*, traits::DataSource};
+use factory_lib::prelude::*;
+use factory_lib::traits::DataSource;
 use itertools::Itertools as _;
 
 fn main() -> Result<()> {
@@ -61,7 +62,7 @@ fn main() -> Result<()> {
 
     if save_figures {
         let file_name: PathBuf = "outputs/explore.svg".into();
-        recipe_graph.save_as_svg(file_name)?;
+        // recipe_graph.save_as_svg(file_name)?;
     }
 
     Ok(())
